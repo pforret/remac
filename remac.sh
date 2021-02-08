@@ -58,7 +58,24 @@ main() {
     #TIP: use «$script_prefix set_mac» to set new MAC address
     #TIP:> $script_prefix set_mac
     # shellcheck disable=SC2154
-    do_set_mac
+    if [[ "$interface"  == "first" ]] ; then
+      debug "Detecting first active interface ..."
+      interface="$(get_first_active)"
+      debug "Found interface : $interface"
+    fi
+    [[ -z "$interface" ]] && die "Can't find default interface"
+    mac_address=$(get_mac_address "$interface")
+    [[ -z "$mac_address" ]] && die "Can't find interface [$interface] - use $script_prefix get to get a list"
+    out "Old MAC address: $mac_address"
+    if [[ "$prefix"  == "copy" ]] ; then
+      prefix=$(echo "$mac_address" | cut -c1-8)
+    fi
+    if [[ $prefix != *":"* ]] ; then
+      prefix=$(pick_prefix "$prefix")
+    fi
+    [[ -z "$prefix" ]] && die "Can't find prefix - specify it like AA:BB:CC"
+    debug "Using company prefix [$prefix]"
+    do_set_mac "$prefix"
     ;;
 
   check|env|test)
@@ -84,24 +101,49 @@ main() {
 #####################################################################
 
 do_get_mac() {
-  ifconfig -s | awk 'NR > 1 {print $1}' | grep -v lo \
+  first_active=""
+  list_interfaces \
   | while read -r inet ; do
-      macaddr=$(ifconfig "$inet" | awk '/HWaddr/ {print $5}')
-      ipaddr4=$(ifconfig "$inet" | awk '/inet addr/ {print $2}')
-      ipaddr6=$(ifconfig "$inet" | awk '/inet6 addr/ {print $2}')
-      if [[ -n "$macaddr" ]] ; then
-        mac_prefix=$(echo "$macaddr" | cut -c1-8)
-        manufacturer=$(get_prefixes | grep -i "$mac_prefix" | head -1 | awk 'BEGIN {IFS="\t"} {print $3}')
-        out "$col_ylw$inet$col_reset: $ipaddr4/$ipaddr6 - MAC:$macaddr ($manufacturer)"
-      else
-        out "$col_red$inet$col_reset: $ipaddr4/$ipaddr6?"
+      [[ -z "$inet" ]] && continue
+      mac_addr=$(get_mac_address "$inet")
+      [[ -z "$mac_addr" ]] && continue
+      ipaddr4=$(get_ip4_address "$inet")
+      [[ -z "$ipaddr4" ]] && continue
+      [[ -z "$first_active" ]] && first_active="$inet"
+      if [[ -n "$mac_addr" ]] ; then
+        mac_prefix=$(echo "$mac_addr" | cut -c1-8)
+        manufacturer=$(find_prefix "$mac_prefix")
+        out "Interface: $col_ylw$inet$col_reset | IP address: $ipaddr4 | MAC: $col_ylw$mac_addr$col_reset ($manufacturer)"
       fi
     done
 }
 
+get_first_active() {
+  list_interfaces \
+  | while read -r inet ; do
+      [[ -z "$inet" ]] && continue
+      mac_addr=$(get_mac_address "$inet")
+      [[ -z "$mac_addr" ]] && continue
+      ipaddr4=$(get_ip4_address "$inet")
+      [[ -z "$ipaddr4" ]] && continue
+      echo "$inet"
+    done \
+    | head -1
+}
+
+list_interfaces(){ ifconfig | grep -E '^\w+:' | awk 'NR > 1 {gsub(":","",$1); print $1}' | grep -v lo; }
+get_mac_address(){ ifconfig "$1" | grep -o -E '([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}' | head -1 ; }
+get_ip4_address(){ ifconfig "$1" | awk '/inet / {print $2}' ; }
+find_prefix(){ get_prefixes | grep -i "$1" | head -1 | awk 'BEGIN {IFS="\t"} {$1=""; $2=""; gsub(/^\s+/,""); print}' ;}
+
 do_set_mac() {
-  log_to_file "set_mac"
-  # < "$1"  do_set_mac_stuff > "$2"
+  full_mac="$1:$(generate_random_hex)"
+  out "New MAC address: $full_mac"
+
+}
+
+generate_random_hex(){
+  printf '%x:%x:%x\n' $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256))
 }
 
 get_prefixes(){
