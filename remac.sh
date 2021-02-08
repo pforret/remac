@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-### ==============================================================================
-### SO HOW DO YOU PROCEED WITH YOUR SCRIPT?
-### 1. define the options/parameters and defaults you need in list_options()
-### 2. define dependencies on other programs/scripts in list_dependencies()
-### 3. implement the different actions in main() with helper functions
-### 4. implement helper functions you defined in previous step
-### ==============================================================================
 
 ### Created by Peter Forret ( pforret ) on 2021-02-08
 ### Based on https://github.com/pforret/bashew 1.13.7
@@ -15,25 +8,6 @@ readonly script_created="2021-02-08"
 readonly run_as_root=-1 # run_as_root: 0 = don't check anything / 1 = script MUST run as root / -1 = script MAY NOT run as root
 
 list_options() {
-  ### Change the next lines to reflect which flags/options/parameters you need
-  ### flag:   switch a flag 'on' / no value specified
-  ###     flag|<short>|<long>|<description>
-  ###     e.g. "-v" or "--verbose" for verbose output / default is always 'off'
-  ###     will be available as $<long> in the script e.g. $verbose
-  ### option: set an option / 1 value specified
-  ###     option|<short>|<long>|<description>|<default>
-  ###     e.g. "-e <extension>" or "--extension <extension>" for a file extension
-  ###     will be available a $<long> in the script e.g. $extension
-  ### list: add an list/array item / 1 value specified
-  ###     list|<short>|<long>|<description>| (default is ignored)
-  ###     e.g. "-u <user1> -u <user2>" or "--user <user1> --user <user2>"
-  ###     will be available a $<long> array in the script e.g. ${user[@]}
-  ### param:  comes after the options
-  ###     param|<type>|<long>|<description>
-  ###     <type> = 1 for single parameters - e.g. param|1|output expects 1 parameter <output>
-  ###     <type> = ? for optional parameters - e.g. param|1|output expects 1 parameter <output>
-  ###     <type> = n for list parameter    - e.g. param|n|inputs expects <input1> <input2> ... <input99>
-  ###     will be available as $<long> in the script after option/param parsing
   echo -n "
 #commented lines will be filtered
 flag|h|help|show usage
@@ -42,28 +16,17 @@ flag|v|verbose|output more
 flag|f|force|do not ask for confirmation (always yes)
 option|l|log_dir|folder for log files |$HOME/log/$script_prefix
 option|t|tmp_dir|folder for temp files|.tmp
-#option|w|width|width to use|800
-#list|u|user|user(s) to execute this for
-param|1|action|action to perform: analyze/convert
-param|?|input|input file
-param|?|output|output file
+option|p|prefix|MAC company prefix: <company>/<XX:XX:XX>/copy|copy
+option|i|interface|name of interface: <eth0>|first
+param|1|action|action to perform: get/set/prefix
+param|?|input|search text for prefix
 " | grep -v '^#' | grep -v '^\s*$'
 }
 
 list_dependencies() {
-  ### Change the next lines to reflect which binaries(programs) or scripts are necessary to run this script
-  # Example 1: a regular package that should be installed with apt/brew/yum/...
-  #curl
-  # Example 2: a program that should be installed with apt/brew/yum/... through a package with a different name
-  #convert|imagemagick
-  # Example 3: a package with its own package manager: basher (shell), go get (golang), cargo (Rust)...
-  #progressbar|basher install pforret/progressbar
   echo -n "
 gawk
 curl
-#ffmpeg
-#convert|imagemagick
-#progressbar|basher install pforret/progressbar
 " | grep -v "^#" | grep -v '^\s*$'
 }
 
@@ -77,21 +40,28 @@ main() {
 
   action=$(lower_case "$action")
   case $action in
-  action1)
-    #TIP: use «$script_prefix action1» to ...
-    #TIP:> $script_prefix action1 input.txt
+  prefix)
+    #TIP: use «$script_prefix get_mac» to ...
+    #TIP:> $script_prefix get_mac input.txt
     # shellcheck disable=SC2154
-    do_action1 "$input"
+    get_prefixes | grep -i "$input"
     ;;
 
-  action2)
-    #TIP: use «$script_prefix action2» to ...
-    #TIP:> $script_prefix action2 input.txt output.pdf
+  get_mac|get)
+    #TIP: use «$script_prefix get_mac» to get all MAC addresses
+    #TIP:> $script_prefix get_mac
     # shellcheck disable=SC2154
-    do_action2 "$input" "$output"
+    do_get_mac
     ;;
 
-  check|env)
+  set_mac|set)
+    #TIP: use «$script_prefix set_mac» to set new MAC address
+    #TIP:> $script_prefix set_mac
+    # shellcheck disable=SC2154
+    do_set_mac
+    ;;
+
+  check|env|test)
     ## leave this default action, it will make it easier to test your script
     #TIP: use «$script_prefix check» to check if this script is ready to execute and what values the options/flags are
     #TIP:> $script_prefix check
@@ -113,14 +83,41 @@ main() {
 ## Put your helper scripts here
 #####################################################################
 
-do_action1() {
-  log_to_file "action1 [$input]"
-  # < "$1"  do_action1_stuff
+do_get_mac() {
+  ifconfig -s | awk 'NR > 1 {print $1}' | grep -v lo \
+  | while read -r inet ; do
+      macaddr=$(ifconfig $inet | awk '/HWaddr/ {print $5}')
+      ipaddr4=$(ifconfig $inet | awk '/inet addr/ {print $2}')
+      ipaddr6=$(ifconfig $inet | awk '/inet6 addr/ {print $2}')
+      if [[ -n "$macaddr" ]] ; then
+        mac_prefix=$(echo "$macaddr" | cut -c1-8)
+        manufacturer=$(get_prefixes | grep -i "$mac_prefix" | head -1 | awk 'BEGIN {IFS="\t"} {print $3}')
+        out "$col_ylw$inet$col_reset: $ipaddr4/$ipaddr6 - MAC:$macaddr ($manufacturer)"
+      else
+        out "$col_red$inet$col_reset: $ipaddr4/$ipaddr6?"
+      fi
+    done
 }
 
-do_action2() {
-  log_to_file "action2 [$input] -> [$output]"
-  # < "$1"  do_action2_stuff > "$2"
+do_set_mac() {
+  log_to_file "set_mac [$input] -> [$output]"
+  # < "$1"  do_set_mac_stuff > "$2"
+}
+
+get_prefixes(){
+  url="https://gitlab.com/wireshark/wireshark/-/raw/master/manuf"
+  tmp_prefixes="$tmp_dir/prefixes.txt"
+  if [[ ! -f "$tmp_prefixes" ]] ; then
+    curl -s "$url" \
+    | grep -v -e "^#" -e "^\s*$" \
+    | awk '{if(length($1) == 8) {print} }' \
+    > "$tmp_prefixes"
+  fi
+  cat "$tmp_prefixes"
+}
+
+pick_prefix(){
+  get_prefixes | grep -i "$1" | cut -c1-8 | head -1
 }
 
 do_check() {

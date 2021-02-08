@@ -8,7 +8,9 @@
 
 # remac
 
-change the MAC address of your computer to avoid trackability
+change the MAC address of your computer to avoid traceability
+
+inspired by https://josh.works/shell-script-basics-change-mac-address
 
 ## Installation
 
