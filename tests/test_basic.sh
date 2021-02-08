@@ -14,7 +14,7 @@ root_folder=$(cd .. && pwd) # tests/.. is root folder
 # shellcheck disable=SC2012
 # shellcheck disable=SC2035
 root_script=$(find "$root_folder"  -maxdepth 1 -name "*.sh" | head -1) # normally there should be only 1
-
+echo "Script = $root_script"
 test_no_parameters_shows_usage() {
   # script without parameters should give usage info
   assert "$root_script"

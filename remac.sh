@@ -86,9 +86,9 @@ main() {
 do_get_mac() {
   ifconfig -s | awk 'NR > 1 {print $1}' | grep -v lo \
   | while read -r inet ; do
-      macaddr=$(ifconfig $inet | awk '/HWaddr/ {print $5}')
-      ipaddr4=$(ifconfig $inet | awk '/inet addr/ {print $2}')
-      ipaddr6=$(ifconfig $inet | awk '/inet6 addr/ {print $2}')
+      macaddr=$(ifconfig "$inet" | awk '/HWaddr/ {print $5}')
+      ipaddr4=$(ifconfig "$inet" | awk '/inet addr/ {print $2}')
+      ipaddr6=$(ifconfig "$inet" | awk '/inet6 addr/ {print $2}')
       if [[ -n "$macaddr" ]] ; then
         mac_prefix=$(echo "$macaddr" | cut -c1-8)
         manufacturer=$(get_prefixes | grep -i "$mac_prefix" | head -1 | awk 'BEGIN {IFS="\t"} {print $3}')
@@ -100,12 +100,13 @@ do_get_mac() {
 }
 
 do_set_mac() {
-  log_to_file "set_mac [$input] -> [$output]"
+  log_to_file "set_mac"
   # < "$1"  do_set_mac_stuff > "$2"
 }
 
 get_prefixes(){
   url="https://gitlab.com/wireshark/wireshark/-/raw/master/manuf"
+  # shellcheck disable=SC2154
   tmp_prefixes="$tmp_dir/prefixes.txt"
   if [[ ! -f "$tmp_prefixes" ]] ; then
     curl -s "$url" \
