@@ -27,6 +27,7 @@ list_dependencies() {
   echo -n "
 gawk
 curl
+ifconfig
 " | grep -v "^#" | grep -v '^\s*$'
 }
 
