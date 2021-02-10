@@ -57,25 +57,7 @@ main() {
   set_mac|set)
     #TIP: use «$script_prefix set_mac» to set new MAC address
     #TIP:> $script_prefix set_mac
-    # shellcheck disable=SC2154
-    if [[ "$interface"  == "first" ]] ; then
-      debug "Detecting first active interface ..."
-      interface="$(get_first_active)"
-      debug "Found interface : $interface"
-    fi
-    [[ -z "$interface" ]] && die "Can't find default interface"
-    mac_address=$(get_mac_address "$interface")
-    [[ -z "$mac_address" ]] && die "Can't find interface [$interface] - use $script_prefix get to get a list"
-    out "Old MAC address: $mac_address"
-    if [[ "$prefix"  == "copy" ]] ; then
-      prefix=$(echo "$mac_address" | cut -c1-8)
-    fi
-    if [[ $prefix != *":"* ]] ; then
-      prefix=$(pick_prefix "$prefix")
-    fi
-    [[ -z "$prefix" ]] && die "Can't find prefix - specify it like AA:BB:CC"
-    debug "Using company prefix [$prefix]"
-    do_set_mac "$prefix"
+    do_set_mac
     ;;
 
   check|env|test)
@@ -137,9 +119,36 @@ get_ip4_address(){ ifconfig "$1" | awk '/inet / {print $2}' ; }
 find_prefix(){ get_prefixes | grep -i "$1" | head -1 | awk 'BEGIN {IFS="\t"} {$1=""; $2=""; gsub(/^\s+/,""); print}' ;}
 
 do_set_mac() {
-  full_mac="$1:$(generate_random_hex)"
-  out "New MAC address: $full_mac"
+    # shellcheck disable=SC2154
+    if [[ "$interface"  == "first" ]] ; then
+      debug "Detecting first active interface ..."
+      interface="$(get_first_active)"
+      debug "Found interface : $interface"
+    fi
+    [[ -z "$interface" ]] && die "Can't find default interface"
+    announce "Interface to set: $interface"
+    mac_address=$(get_mac_address "$interface")
+    [[ -z "$mac_address" ]] && die "Can't find interface [$interface] - use $script_prefix get to get a list"
+    announce "Old MAC address : $mac_address"
+    if [[ "$prefix"  == "copy" ]] ; then
+      prefix=$(echo "$mac_address" | cut -c1-8)
+    fi
+    if [[ $prefix != *":"* ]] ; then
+      prefix=$(pick_prefix "$prefix")
+    fi
+    [[ -z "$prefix" ]] && die "Can't find prefix - specify it like AA:BB:CC"
+    manufacturer=$(find_prefix "$prefix")
+    announce "Using company ID: $prefix ($manufacturer)"
+  full_mac="$prefix:$(generate_random_hex)"
+  announce "New MAC address : $full_mac"
+  set_ifconfig "$interface" "$full_mac"
+}
 
+set_ifconfig(){
+  # $1 = interface name like eth0
+  # $2 = new MAC address
+  announce "Changing the network address requires the root password"
+  sudo ifconfig "$1" ether "$2"
 }
 
 generate_random_hex(){
