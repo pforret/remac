@@ -6,6 +6,8 @@
 ![GH License](https://img.shields.io/github/license/pforret/remac)
 [![basher install](https://img.shields.io/badge/basher-install-white?logo=gnu-bash&style=flat)](https://basher.gitparade.com/package/)
 
+![remac](assets/remac.jpg)
+
 # remac
 
 change the MAC address of your computer to avoid traceability
